@@ -7,11 +7,26 @@
 
 ## 바로 보기
 
+- [최종 발표자료 PDF](./docs/presentation/발표자료.pdf)
 - [최종 발표자료 HTML](./docs/presentation/저탄마을_발표자료.html)
 - [발표 스크립트 v3](./docs/presentation/저탄마을_발표_스크립트_v3.md)
 - [팀 기여 정리](./docs/portfolio/team-contributions.md)
 - [산출물 인덱스](./docs/portfolio/artifact-index.md)
 - [서비스 소스코드](./locaville)
+
+## 발표자료 하이라이트
+
+| 서비스 콘셉트 | 현장 문제 |
+| --- | --- |
+| <img src="./docs/presentation/slides/01-title.png" alt="저탄마을 발표 타이틀" width="420"> | <img src="./docs/presentation/slides/02-field-problem.png" alt="살펴야 할 것이 한두 가지가 아닙니다" width="420"> |
+
+| 모바일 기록 흐름 | 시스템 아키텍처 |
+| --- | --- |
+| <img src="./docs/presentation/slides/03-mobile-demo.png" alt="사진과 목소리로 기록하는 모바일 앱" width="420"> | <img src="./docs/presentation/slides/04-architecture.png" alt="저탄마을 시스템 아키텍처" width="420"> |
+
+| 프로젝트 진행 | 사업 모델 |
+| --- | --- |
+| <img src="./docs/presentation/slides/05-sprint-wbs.png" alt="5개 스프린트 WBS" width="420"> | <img src="./docs/presentation/slides/06-business-model.png" alt="농가당 월 1000원 사업 모델" width="420"> |
 
 ## 문제 정의
 

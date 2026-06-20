@@ -6,9 +6,11 @@
 
 | 파일 | 설명 |
 | --- | --- |
+| [`docs/presentation/발표자료.pdf`](../presentation/발표자료.pdf) | 최종 발표자료 PDF 원본 |
 | [`docs/presentation/저탄마을_발표자료.html`](../presentation/저탄마을_발표자료.html) | 최종 발표용 오프라인 HTML 슬라이드 |
 | [`docs/presentation/저탄마을_발표_스크립트_v3.md`](../presentation/저탄마을_발표_스크립트_v3.md) | 발표 스크립트와 Q&A 백업 |
 | [`docs/presentation/저탄마을_슬라이드_구성지시서_v3.md`](../presentation/저탄마을_슬라이드_구성지시서_v3.md) | 슬라이드 구성 지시서 |
+| [`docs/presentation/slides/`](../presentation/slides) | README에 사용한 대표 장표 이미지 |
 
 ## 코드
 
