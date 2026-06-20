@@ -1,0 +1,310 @@
+@import "tailwindcss";
+
+/* ════════════════════════════════════════════════════════════════
+   저탄마을 농가앱 — Tailwind v4 소스 (build 시 @tailwindcss/postcss 가 컴파일).
+   nextjs_app 디자인 교체에 맞춰 재작성. 컴포넌트는 arbitrary value 로
+   토큰을 참조합니다: className="bg-[var(--lv-bg)] text-[color:var(--lv-ink)]".
+   ════════════════════════════════════════════════════════════════ */
+
+/* 고령 농가 가독성 — base 17px (간단하게 보기 ON 시 body[data-large-text="2"] override). */
+html { font-size: 17px; }
+
+/* ════════════════════════════════════════════════════════════════
+   저탄마을 Adaptive Field Interface — Design Tokens v1
+   (Focus Mode = 쉬운 화면 · Overview Mode = 표준 화면 · Field Mode = 현장 제안)
+
+   [Color/대비 — WCAG]
+   · ink #17231b        : 본문/제목. 흰 카드 위 15.9:1, 크림 위 13.4:1
+   · ink-soft #4f5b52   : 보조 텍스트. 흰 카드 위 7.1:1, 크림 위 6.3:1 (AA+)
+   · primary #174c35    : CTA 배경. 위에 흰 글자 9.9:1 (AAA)
+   · warn #7e4a1a       : "확인 필요/마감 임박" 전용. warn-soft 위 5.8:1, 흰 위 7.3:1 (AA)
+   · 상태는 색+텍스트 라벨(+아이콘) 병행 — 색 단독 전달 금지
+   · 상태 라벨 체계 (bg / text):
+     오늘 우선  #155438 / #ffffff      확인 필요  #f1e3ce / #7e4a1a
+     마감 임박  #f8dfd9 / #9a332c      완료      #e3f0e8 / #155438
+     업로드 실패 #f8dfd9 / #a83a32     도움 가능  #e3f0e8 / #155438
+     진행 중    #f3ebdd / #556158      사진 있음  #e3f0e8 / #155438
+
+   [Typography] (Pretendard, base 17px — 고령 가독성)
+   · display 24~26 bold : 사용자 상태 문장, Focus 카드 제목
+   · title   19~23 bold : 카드 제목/리스트 제목
+   · body    16~17 med  : 본문 (최소 17px 목표, 보조 16px까지)
+   · label   14~15 semi : 메타/배지
+   · caption 13 semi    : 시스템 라벨(증빙 확인·빠른 기록 등)
+   · line-height 1.35~1.55
+
+   [Radius]  hero 카드 28px · 일반 카드 24px · CTA 20px · 타일 16px · 칩 full
+             헤더 하단 28px
+   [Spacing] page 좌우 20px · hero 카드 padding 24px · 카드 간 16px · 행 padding 16~20px
+   [Touch]   최소 48px · 주요 CTA 72px+ · 보조 액션 56px+ · 인접 타깃 간격 8px+
+   [Motion]  press 80~150ms, 전환 150~220ms ease (prefers-reduced-motion 일괄 무효화)
+   [Shadow]  카드 0 2px 8px rgba(23,35,27,0.05) · 헤더 0 12px 32px rgba(16,36,25,0.18)
+   ════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── 저탄마을 디자인 토큰 (nextjs_app/styles/locaville-tokens.css 병합) ── */
+  /* 구조 토큰 */
+  --lv-r-card: 22px;
+  --lv-r-control: 20px;
+  --lv-r-tile: 16px;
+  --lv-touch-min: 48px;
+  --lv-touch-cta: 72px;
+  /* 표면 — 따뜻한 크림(누렇지 않게) */
+  --lv-bg: #f6f1e7;
+  --lv-bg-soft: #faf7f0;
+  --lv-surface-soft: #f3ebdd;  /* 카드 안 인셋 박스(안내문·진행 중 칩) 전용 */
+  --lv-card: #ffffff;
+  /* 텍스트 (WCAG AA) */
+  --lv-ink: #17231b;
+  --lv-ink-soft: #4f5b52;   /* 흰 카드 위 7.1:1, 크림 위 6.3:1 — 베이지 인셋 박스 위 작은 라벨 가독 */
+  --lv-muted: #65706a;      /* tertiary — 흰 카드 위 5.2:1, 크림 위 4.6:1 */
+  --lv-muted-2: #5d6155;    /* 하단 탭 비활성 라벨 — 흰 위 6.3:1 */
+  /* 라인 */
+  --lv-line: #e5dccb;
+  --lv-line-soft: #eee7d8;
+  /* 브랜드(딥 그린) — 완료·정상·주요 행동 */
+  --lv-primary: #155438;     /* 위에 흰 글자 8.9:1 */
+  --lv-accent-dark: #0f432d;
+  --lv-accent-soft: #e3f0e8;
+  /* 주의(확인 필요) — 낮은 채도 황토. warn-soft 위 5.8:1, 흰 위 7.3:1 */
+  --lv-warn: #7e4a1a;
+  --lv-warn-soft: #f1e3ce;
+  /* 마감 임박 — danger-soft 위 5.7:1 (확인 필요와 구분되는 적갈색) */
+  --lv-urgent: #9a332c;
+  /* 다크 헤더(Today Command Bar) — 잉크 그린 패널 */
+  --lv-header: #13281d;
+  /* 다크 헤더 위 보조 텍스트(날씨 등) — #13281d 대비 10:1, 흐려 보이지 않게 한 단계 밝힘 */
+  --lv-on-dark-soft: #d3dcd3;
+  /* 실패·삭제·위험 (이때만 빨강) — danger-soft 위 4.9:1 */
+  --lv-danger: #a83a32;
+  --lv-danger-soft: #f8dfd9;
+
+  /* ── 기존 팔레트 (.jt-* 클래스 + 일부 레거시 화면 호환) ── */
+  --bg: #f6f1e7; --bg-soft: #faf7f0; --card: #ffffff;
+  --ink: #17231b; --ink-soft: #4f5b52; --muted: #65706a; --muted-2: #8a8e7e;
+  --line: #e5dccb; --line-soft: #eee7d8;
+  --accent: #155438; --accent-dark: #0f432d; --accent-soft: #e3f0e8;
+  --warn: #7e4a1a; --warn-soft: #f1e3ce; --danger: #a83a32; --danger-soft: #f8dfd9; --info-soft: #edf5f7;
+  --radius: 12px; --radius-sm: 8px; --radius-pill: 999px;
+  --primary: #155438;
+}
+
+/* 농가 앱 베이스 — 종이 같은 따뜻한 아이보리 톤.
+   SPA 셸이 h-[100dvh] 풀스크린 flex 컬럼이라, html/body 도 전체 높이를 차지하고
+   페이지 자체 스크롤은 막는다(본문 영역 main 만 내부 스크롤). */
+html, body {
+  height: 100%;
+  background: var(--lv-bg);
+  color: var(--lv-ink);
+  font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Geist", sans-serif;
+}
+body { overflow: hidden; }
+
+/* 접근성: 키보드/스위치 포커스 표시 */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--lv-accent-dark);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+button:focus:not(:focus-visible) { outline: none; }
+
+/* 접근성: 움직임 줄이기 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 스크롤바 숨김 — 스크롤 영역에서 사용. */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── 공용 카드/버튼 (.jt-*) — 일부 레거시 호환용. 신규 디자인은 토큰을 직접 참조. ── */
+.jt-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(31, 42, 31, 0.04), 0 6px 16px rgba(31, 42, 31, 0.035); }
+.jt-card-soft { background: var(--bg-soft); border: 1px solid var(--line-soft); border-radius: var(--radius); }
+.jt-card-accent { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); }
+.jt-btn-primary { background: var(--accent); color: #fff; font-weight: 700; letter-spacing: 0.01em; }
+.jt-btn-primary:active { background: var(--accent-dark); }
+.jt-btn-outline { background: var(--card); color: var(--accent); border: 2px solid var(--accent); font-weight: 700; }
+.jt-btn-outline:active { background: var(--accent-soft); }
+.jt-alert-warn { background: var(--warn-soft); border: 1px solid var(--warn); color: var(--ink); border-radius: var(--radius); }
+
+/* ════════════════════════════════════════════════════════════════
+   글자 크기 옵션 — body[data-large-text="1"|"2"] (preferences.applyFontScaleToBody).
+   px 고정 폰트는 영향받지 않음 (디자인 토큰의 fixed-px 텍스트는 의도적 trade-off).
+   ════════════════════════════════════════════════════════════════ */
+body[data-large-text="1"] { font-size: 18px; }
+body[data-large-text="1"] .text-xs { font-size: 14px; }
+body[data-large-text="1"] .text-sm { font-size: 16px; }
+body[data-large-text="1"] .text-base { font-size: 18px; }
+body[data-large-text="1"] .text-lg { font-size: 21px; }
+body[data-large-text="1"] .text-xl { font-size: 23px; }
+body[data-large-text="1"] .text-2xl { font-size: 28px; }
+body[data-large-text="1"] .text-3xl { font-size: 34px; }
+
+body[data-large-text="2"] { font-size: 26px; line-height: 1.55; }
+body[data-large-text="2"] .text-xs { font-size: 18px; }
+body[data-large-text="2"] .text-sm { font-size: 22px; }
+body[data-large-text="2"] .text-base { font-size: 26px; }
+body[data-large-text="2"] .text-lg { font-size: 30px; }
+body[data-large-text="2"] .text-xl { font-size: 34px; }
+body[data-large-text="2"] .text-2xl { font-size: 40px; }
+body[data-large-text="2"] .text-3xl { font-size: 48px; }
+
+/* ════════════════════════════════════════════════════════════════
+   네이티브 앱 느낌의 모션·인터랙션 (lv-*).
+   원본 프로토타입 `저탄마을 농가앱.html` 의 <style> 그대로 통합.
+   컴포넌트가 className 으로 lv-screen / lv-press / lv-stagger 등을 박으면 자동 적용.
+
+   prefers-reduced-motion 대응은 위 블록에서 일괄 처리.
+   ════════════════════════════════════════════════════════════════ */
+
+/* iOS 같은 tap highlight 제거 (네이티브 느낌) */
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+/* ────────────────────────────────────────────────────────────
+   ✨ 전역 press feedback — 컴포넌트가 lv-press 안 박아도 모든 클릭 요소가
+   누를 때 살짝 가라앉음. disabled 는 제외. native 앱 느낌의 핵심.
+   ──────────────────────────────────────────────────────────── */
+button:not(:disabled),
+a[href],
+[role="button"]:not([aria-disabled="true"]) {
+  transition: transform 0.08s ease, opacity 0.12s ease, background-color 0.12s ease;
+}
+button:not(:disabled):active,
+a[href]:active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: translateY(1px) scale(0.985);
+  opacity: 0.92;
+}
+
+/* 카드 (rounded + border + bg-card) 도 살짝 hover/active 반응 — 카드 자체가 button 안에 있을 때 */
+button > div[class*="rounded-"][class*="border"],
+button[class*="rounded-"][class*="border"] {
+  transition: transform 0.1s ease, box-shadow 0.14s ease;
+}
+
+/* 스크롤바 숨김 — body 전역 + 컨테이너용. 모바일 폼팩터라 스크롤바 자체가 노이즈. */
+::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; }
+
+/* ── 카드 / press / row ───────────────────────────────────── */
+.lv-card {
+  background: var(--lv-card);
+  border: 1px solid var(--lv-line-soft);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(31,42,31,0.04), 0 6px 14px rgba(31,42,31,0.04);
+}
+.lv-press { transition: transform 0.08s ease, opacity 0.12s ease; }
+.lv-press:active { transform: translateY(1px); opacity: 0.94; }
+.lv-row { transition: background 0.12s ease; }
+.lv-row:active { background: var(--lv-bg-soft) !important; }
+
+/* ── 화면 전환 ─────────────────────────────────────────────
+   네이티브 push: transform 만(불투명도 X) — 캡처/일시중지 시에도 안 사라짐.
+   거리 6px 로 줄여서 자식 stagger 와 겹쳐도 깜빡임 최소. */
+.lv-screen { height: 100%; animation: lv-screen-in 0.22s cubic-bezier(0.22,1,0.36,1); }
+@keyframes lv-screen-in {
+  from { transform: translateY(6px); }
+  to { transform: none; }
+}
+
+/* ── fade-in ───────────────────────────────────────────── */
+@keyframes lv-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.lv-fade { animation: lv-fade-in 0.28s ease-out; }
+
+/* ── 하단 시트 슬라이드 업 ─────────────────────────────────── */
+@keyframes lv-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.lv-sheet { animation: lv-sheet-up 0.32s cubic-bezier(0.16,1,0.3,1); }
+
+/* ── stagger: 자식 1~5번이 시간차로 등장 ────────────────────────
+   resting state 는 완전히 보이는 상태. 첫 진입에만 keyframe 이 한 번 재생.
+   from opacity 0 → 0.35 로 완화 + 거리 짧게: 자식이 완전히 안 보이는 구간이 사라져
+   화면이 잠깐 흰색(베이지)으로 비는 깜빡임 제거. */
+@keyframes lv-stagger-in {
+  from { opacity: 0.35; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lv-stagger > * {
+    animation: lv-stagger-in 0.32s ease-out;
+    animation-fill-mode: backwards;  /* delay 동안에도 from 상태 유지 — 깜빡임 추가 방지 */
+  }
+  .lv-stagger > *:nth-child(1) { animation-delay: 0.00s; }
+  .lv-stagger > *:nth-child(2) { animation-delay: 0.05s; }
+  .lv-stagger > *:nth-child(3) { animation-delay: 0.10s; }
+  .lv-stagger > *:nth-child(4) { animation-delay: 0.15s; }
+  .lv-stagger > *:nth-child(5) { animation-delay: 0.20s; }
+}
+
+/* ── 로딩 회전 ────────────────────────────────────────────── */
+@keyframes lv-spin { to { transform: rotate(360deg); } }
+.lv-spin { animation: lv-spin 0.9s linear infinite; }
+
+/* ── 챗봇 타이핑 점 3개 ───────────────────────────────────── */
+.lv-typing-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lv-primary);
+  animation: lv-typing 1s infinite ease-in-out;
+}
+@keyframes lv-typing {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* ── 보이스 입력 오브 (음성 녹음 시 펄스) ──────────────────────── */
+.lv-orb-core {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 32px rgba(47, 109, 79, 0.32);
+}
+.lv-orb-ring {
+  position: absolute;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: 2px solid;
+  opacity: 0.5;
+  animation: lv-orb-ring 1.8s ease-out infinite;
+}
+.lv-orb-ring-2 { animation-delay: 0.9s; }
+@keyframes lv-orb-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes lv-orb-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+.lv-orb-pulse { animation: lv-orb-pulse 1.4s ease-in-out infinite; }
+
+/* ── 도우미 트랙터 ───────────────────────────────────────── */
+@keyframes lv-tractor-r {
+  0% { transform: translateX(-120px); }
+  100% { transform: translateX(120px); }
+}
+@keyframes lv-tractor-l {
+  0% { transform: translateX(120px) scaleX(-1); }
+  100% { transform: translateX(-120px) scaleX(-1); }
+}
+.lv-tractor-r { animation: lv-tractor-r 4s linear infinite; }
+.lv-tractor-l { animation: lv-tractor-l 4s linear infinite; }

@@ -1,0 +1,60 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "clusterBkg": "#FAF7F0",
+    "clusterBorder": "#D9D4C8",
+    "edgeLabelBackground": "#FAF7F0"
+  },
+  "flowchart": { "curve": "basis", "htmlLabels": true }
+}}%%
+flowchart TD
+  GH["🐙 GitHub<br/>cherrima/good-vibe — monorepo<br/>locaville/{app_user · web_user · web_admin · backend · library}"]
+
+  subgraph VERCEL["Vercel — frontend 자동 HTTPS"]
+    direction LR
+    V1["app_user<br/>농업인 앱<br/>NEXT_PUBLIC_API_BASE_URL"]
+    V2["web_user<br/>이장님 대시보드<br/>NEXT_PUBLIC_API_BASE_URL"]
+  end
+
+  subgraph RENDER["Render — Starter plan (cold start 해소)"]
+    BE["FastAPI backend<br/>uvicorn app.main:app<br/>pip install -e locaville/library"]
+    ENVS["환경변수 (Render Dashboard)<br/>OPENAI · GEMINI · GOOGLE_TTS<br/>RETURNZERO · KAKAO · data.go.kr · DB_URL"]
+    BE --- ENVS
+  end
+
+  subgraph SUPA["Supabase"]
+    direction LR
+    PG[("PostgreSQL<br/>+ pgvector")]
+    OBJ[("Object Storage<br/>evidence bucket")]
+  end
+
+  LOCAL["⚙ web_admin<br/>관리자 화면 — <b>로컬 실행 (미배포)</b><br/>localhost:3002"]
+
+  GH -- "push → 자동 배포" --> VERCEL
+  GH -- "push → 자동 배포" --> RENDER
+  V1 -- "HTTPS API 호출" --> BE
+  V2 -- "HTTPS API 호출" --> BE
+  LOCAL -. "localhost → 직접 호출" .-> BE
+  BE --> PG
+  BE --> OBJ
+
+  CAM["📷 카메라 (getUserMedia)<br/>HTTPS 필수 → Vercel 배포 URL 에서만 동작"]
+  V1 --- CAM
+
+  classDef repo fill:#14402A,stroke:#14402A,color:#FAF7F0
+  classDef cloud fill:#E8F0E6,stroke:#1F6B3F,stroke-width:2px,color:#1A2B20
+  classDef db fill:#E8F0E6,stroke:#14402A,stroke-width:2px,color:#1A2B20
+  classDef local fill:#FAF7F0,stroke:#5A6B5E,stroke-dasharray:5 4,color:#5A6B5E
+  classDef gold fill:#FAF7F0,stroke:#E8A93D,stroke-width:2px,color:#1A2B20
+
+  class GH repo
+  class V1,V2,BE cloud
+  class PG,OBJ db
+  class LOCAL local
+  class CAM,ENVS gold

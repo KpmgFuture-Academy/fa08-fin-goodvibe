@@ -1,0 +1,70 @@
+# Render Blueprint — 저탄마을 backend
+# 사용법: Render Dashboard 의 "New" → "Blueprint" 로 이 repo 를 연결하면
+# 아래 service 정의가 자동 detect 됨. envVars 의 값은 Dashboard 에서 별도 입력.
+#
+# 참고: locaville/docs/dev/env-setup-guide.md §7
+#
+# starter 플랜($7/mo) — 상시가동(15분 idle sleep 없음)으로 cold start 제거.
+
+services:
+  - type: web
+    name: locaville-backend
+    env: python
+    region: singapore           # 한국에서 latency 가장 짧음 (Render 옵션 중)
+    plan: starter               # 상시가동 (cold start 없음, 15분 idle sleep 안 함). $7/mo
+    branch: main
+    rootDir: .                  # repo root — build 가 locaville/library editable install 해야 해서
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -e locaville/library
+      pip install -r locaville/backend/requirements.txt
+    startCommand: |
+      cd locaville/backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true            # main push 시 자동 재배포
+
+    envVars:
+      # ============ Python 런타임 ============
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # ============ DB (Supabase Postgres) ============
+      # postgres 는 DB_URL 한 줄로 끝남. mysql 모드면 DB_HOST/PORT/NAME/USER/PASSWORD 분리형.
+      - key: DB_SOURCE
+        value: postgres         # dbcom 이 psycopg 사용하게
+      - key: DB_URL
+        sync: false             # Supabase Dashboard → Project Settings → Database → Connection string (URI)
+      - key: STORAGE_MODE
+        value: rdb              # JSON file fallback 안 씀
+
+      # ============ OpenAI ============
+      - key: OPENAI_API_KEY
+        sync: false
+      # 모델 override 필요 시 Dashboard 에서 추가 (OPENAI_MODEL, OPENAI_VISION_MODEL 등)
+
+      # ============ 외부 API ============
+      - key: KAKAO_REST_API_KEY
+        sync: false
+      - key: DATA_GO_KR_SERVICEKEY
+        sync: false             # 기상청 단기예보
+      - key: NONGSARO_API_KEY
+        sync: false             # 농촌진흥청 농사로 (선택)
+
+      # ============ Supabase Storage (사진/영수증) ============
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false             # service_role key 권장 (bucket 쓰기)
+      - key: SUPABASE_STORAGE_BUCKET
+        value: evidence
+
+      # ============ RAG ============
+      - key: RAG_USE_PGVECTOR
+        value: "1"              # default ON
+      # RAG_EMBEDDING_MODEL / DIM / TABLE 은 코드 default 사용 (text-embedding-3-large / 1536 / rag_chunks)
+
+      # ============ 데모/기본값 ============
+      - key: DEFAULT_CHIEF_USER_NO
+        value: "10000001"
+      - key: DEFAULT_VILLE_ID
+        value: VILLEJT001

@@ -1,0 +1,72 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "clusterBkg": "#FAF7F0",
+    "clusterBorder": "#D9D4C8",
+    "edgeLabelBackground": "#FAF7F0"
+  },
+  "flowchart": { "curve": "basis", "htmlLabels": true }
+}}%%
+flowchart LR
+  subgraph INGEST["Ingestion — 정책 문서 등록 (운영 시점)"]
+    direction TB
+    HWPX["📄 시행지침 HWPX·PDF·DOCX"]
+    PARSE["hwpx_parser + heading_parser<br/>(library/locaville/rag)"]
+    CHUNKS["chunk_builder<br/>제목 계층 보존 청킹"]
+    PRE["POST /rag/pre-parse<br/>→ 청크 미리보기"]
+    REG["POST /rag/register<br/>background task"]
+    HWPX --> PARSE --> CHUNKS --> PRE --> REG
+  end
+
+  subgraph EMB["임베딩"]
+    EMBED["OpenAI<br/>text-embedding-3-large<br/><b>dimensions=1536</b>"]
+  end
+
+  subgraph STORE["Supabase"]
+    VEC[("pgvector<br/>rag_chunks 테이블<br/>embedding vector(1536)")]
+  end
+
+  subgraph QUERY["Query — 도움말 챗 (런타임)"]
+    direction TB
+    Q["농민·이장님 질문<br/>'중간 물떼기 언제 해요?'"]
+    RETR["retrieve_relevant_snippets<br/>코사인 거리 ORDER BY<br/>embedding &lt;=&gt; qvec"]
+    CHAT["chat_with_rag<br/>gpt-4.1-mini<br/>근거 기반·숫자 보존·행정용어 풀이"]
+    OUT["답변 + used_context<br/>(근거 청크 경로)"]
+    Q --> RETR --> CHAT --> OUT
+  end
+
+  subgraph UI["사용 화면"]
+    direction TB
+    A["app_user 도움말<br/>EasyChatCard (쉬운) · ChatHelp (표준)"]
+    W["web_user HelpChat<br/>+ 사업 todo 자동생성<br/>(extract_policy_schedule_rule)"]
+  end
+
+  REG --> EMBED --> VEC
+  VEC --> RETR
+  OUT --> A
+  OUT --> W
+
+  NOTE["<b>RAG 는 정책 Q&A 전용</b><br/>할 일 생성·computed_status 계산에는 미사용<br/>(DB가 권위 · AI는 보조)"]
+  CHAT --- NOTE
+
+  FB["폴백: RAG_USE_PGVECTOR=0 이면<br/>Chroma + HWPX 청크 JSON"]
+  VEC -.-> FB
+
+  classDef ingest fill:#E8F0E6,stroke:#1F6B3F,stroke-width:2px,color:#1A2B20
+  classDef db fill:#E8F0E6,stroke:#14402A,stroke-width:2px,color:#1A2B20
+  classDef ext fill:#FAF7F0,stroke:#5A6B5E,stroke-dasharray:5 4,color:#5A6B5E
+  classDef ui fill:#14402A,stroke:#14402A,color:#FAF7F0
+  classDef gold fill:#FAF7F0,stroke:#E8A93D,stroke-width:2px,color:#1A2B20
+
+  class HWPX,PARSE,CHUNKS,PRE,REG ingest
+  class VEC db
+  class EMBED,CHAT,FB ext
+  class Q,RETR,OUT ingest
+  class A,W ui
+  class NOTE gold

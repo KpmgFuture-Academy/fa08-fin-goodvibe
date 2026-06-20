@@ -1,0 +1,14 @@
+streamlit
+pillow
+numpy
+pandas
+opencv-python
+python-dotenv
+pydantic
+openai
+langchain
+langchain-openai
+langchain-chroma
+chromadb
+lxml
+requests

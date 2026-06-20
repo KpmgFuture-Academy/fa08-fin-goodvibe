@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>저탄마을 — 기술 다이어그램</title>
+<link rel="stylesheet" as="style" crossorigin
+  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root {
+    --bg: #FAF7F0;
+    --ink: #1A2B20;
+    --green-deep: #14402A;
+    --green-mid: #1F6B3F;
+    --green-tint: #E8F0E6;
+    --gold: #E8A93D;
+    --muted: #5A6B5E;
+    --line: #D9D4C8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard", -apple-system, sans-serif;
+  }
+  header {
+    padding: 48px 32px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--green-deep);
+    letter-spacing: -0.02em;
+  }
+  header p { margin: 8px 0 0; color: var(--muted); font-weight: 600; }
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 14px 32px;
+    background: rgba(250, 247, 240, 0.94);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav a {
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--green-deep);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  nav a:hover { background: var(--green-tint); border-color: var(--green-mid); }
+  section {
+    padding: 40px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--green-deep);
+  }
+  section .sub { margin: 0 0 20px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .frame {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+    overflow-x: auto;
+  }
+  .frame img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  .tag {
+    display: inline-block; margin-left: 8px;
+    padding: 2px 10px; border-radius: 999px;
+    background: var(--gold); color: var(--ink);
+    font-size: 12px; font-weight: 800; vertical-align: middle;
+  }
+  footer { padding: 32px; color: var(--muted); font-size: 13px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>저탄마을 (Locaville) — 기술 다이어그램</h1>
+  <p>발표용 · 코드 기준 작성 (2026-06-12) · 추론·가정은 ASSUMPTIONS.md 참조</p>
+</header>
+
+<nav>
+  <a href="#d1">① 시스템 아키텍처</a>
+  <a href="#d2">② 라이브 사진 코칭</a>
+  <a href="#d3">③ 할 일 파이프라인</a>
+  <a href="#d4">④ 데이터 모델 ER</a>
+  <a href="#d5">⑤ RAG 파이프라인</a>
+  <a href="#d6">⑥ 배포 토폴로지</a>
+</nav>
+
+<section id="d1">
+  <h2>① 전체 시스템 아키텍처</h2>
+  <p class="sub">클라이언트 3종 → FastAPI(Render) → Supabase. 외부 API 는 백엔드에서만 — DB가 권위, AI는 보조.</p>
+  <div class="frame"><img src="01-architecture.svg" alt="시스템 아키텍처" /></div>
+</section>
+
+<section id="d2">
+  <h2>② 라이브 사진 코칭 시퀀스 <span class="tag">2초 적응 폴링</span></h2>
+  <p class="sub">카메라 → 로컬 선별 → Gemini 코칭 → Chirp 3 HD TTS. 정적 안내는 prefetch 캐시로 0ms 재생.</p>
+  <div class="frame"><img src="02-coaching.svg" alt="라이브 사진 코칭 시퀀스" /></div>
+</section>
+
+<section id="d3">
+  <h2>③ 할 일 생성 파이프라인 <span class="tag">todo_id = amo·prj·activity·seq</span></h2>
+  <p class="sub">시행지침 → AI 초안 → 관리자 확정 → 이장님 매칭 → prj_todo_list → 오늘 할 일.</p>
+  <div class="frame"><img src="03-todo-pipeline.svg" alt="할 일 생성 파이프라인" /></div>
+</section>
+
+<section id="d4">
+  <h2>④ 데이터 모델 ER</h2>
+  <p class="sub">repositories/ 의 실제 쿼리·시드 SQL 에서 추론한 테이블·관계. 복합 PK 구조가 핵심.</p>
+  <div class="frame"><img src="04-er.svg" alt="데이터 모델 ER" /></div>
+</section>
+
+<section id="d5">
+  <h2>⑤ RAG 파이프라인 <span class="tag">정책 Q&amp;A 전용</span></h2>
+  <p class="sub">HWPX 시행지침 → 청킹 → text-embedding-3-large(1536) → Supabase pgvector → 도움말 챗.</p>
+  <div class="frame"><img src="05-rag.svg" alt="RAG 파이프라인" /></div>
+</section>
+
+<section id="d6">
+  <h2>⑥ 배포 토폴로지</h2>
+  <p class="sub">GitHub → Vercel(앱 2종) + Render(backend) + Supabase. web_admin 은 로컬(미배포).</p>
+  <div class="frame"><img src="06-deploy.svg" alt="배포 토폴로지" /></div>
+</section>
+
+<footer>
+  생성: Mermaid CLI · 팔레트: bg #FAF7F0 / deep #14402A / mid #1F6B3F / gold #E8A93D · 소스: *.mmd (같은 폴더)
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "collection_name": "hwpx_documents",
+  "total_chunks": 300,
+  "embedding_model": "text-embedding-3-small",
+  "length_stats_chars": {
+    "min": 37,
+    "avg": 678,
+    "max": 3645
+  },
+  "metadata_fields": {
+    "chunk_count": 76,
+    "heading_path": 300,
+    "section": 300,
+    "source_file": 300,
+    "total_sources": 300,
+    "source_order": 300,
+    "chunk_index": 76,
+    "source_path": 300,
+    "section_file": 300,
+    "merged_block_start": 43,
+    "document_date": 300,
+    "merged_count": 43,
+    "position": 300,
+    "type": 300,
+    "is_heading": 76,
+    "block_index": 300,
+    "merged_block_end": 43,
+    "table_header": 186,
+    "table_rows": 224,
+    "table_caption": 224,
+    "table_separator": 186,
+    "table_chunk_index": 186,
+    "table_cells": 224,
+    "table_chunk_count": 186,
+    "table_row_index": 6,
+    "attached_table_count": 20
+  },
+  "source_breakdown": {
+    "2026-224_2026년도 저탄소농업 프로그램 시범사업(경종) 상반기 등록신청 공고.hwpx": 17,
+    "2026년 저탄소농업 프로그램 시범사업(경종) 사업시행지침(시행용).hwpx": 283
+  }
+}

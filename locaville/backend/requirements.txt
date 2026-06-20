@@ -1,0 +1,22 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pymysql==1.1.1
+psycopg[binary,pool]==3.3.4
+python-dotenv==1.2.1
+bcrypt>=4.2.0
+openai>=2.26.0,<3.0.0
+cryptography>=44.0.0
+Pillow>=11.2.1
+reportlab>=4.2.2
+# RAG vector store — Supabase pgvector (psycopg 통해). langchain-openai 는 embedding 호출 전용.
+langchain-openai>=1.2.1
+# 사진 증빙 품질검사(블러/밝기/해상도)용. 미설치 시 backend 는 numpy+Pillow 폴백으로 동작.
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+# Supabase Object Storage (사진 증빙) — 미설치 또는 키 미설정 시 로컬 fs 로 폴백.
+supabase>=2.0,<3.0
+# 사업 시행령 등 정책 문서 파싱 — pdf / docx / hwpx 통합 ingest.
+pypdf>=5.0.0
+python-docx>=1.1.0
+lxml>=5.3.0

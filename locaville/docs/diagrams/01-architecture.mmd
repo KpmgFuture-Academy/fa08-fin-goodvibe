@@ -1,0 +1,81 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "secondaryColor": "#FAF7F0",
+    "tertiaryColor": "#FAF7F0",
+    "clusterBkg": "#FAF7F0",
+    "clusterBorder": "#D9D4C8",
+    "edgeLabelBackground": "#FAF7F0"
+  },
+  "flowchart": { "curve": "basis", "htmlLabels": true }
+}}%%
+flowchart LR
+  subgraph CLIENTS["클라이언트 (Next.js 16)"]
+    direction TB
+    APP["📱 app_user<br/>농업인 앱 — 시니어 친화<br/>:3000"]
+    WEB["🖥 web_user<br/>이장님 대시보드<br/>:3001"]
+    ADM["⚙ web_admin<br/>관리자 — 사업/마을 관리<br/>:3002"]
+  end
+
+  subgraph BACKEND["FastAPI Backend (Render)"]
+    direction TB
+    RT["라우터 19종<br/>/ai /todo /diary /evidence<br/>/photo-guard /admin /rag …"]
+    SVC["서비스 계층<br/>ai · todo · diary · evidence<br/>photo_guard · advice · rag"]
+    REPO["repositories<br/>psycopg — dbcom.py 추상화"]
+    RT --> SVC --> REPO
+  end
+
+  subgraph SUPA["Supabase"]
+    direction TB
+    PG[("PostgreSQL<br/><b>DB가 권위</b><br/>journal · evidence · prj_todo_list")]
+    VEC[("pgvector<br/>rag_chunks — 정책 문서")]
+    OBJ[("Object Storage<br/>증빙 사진 원본+워터마크")]
+  end
+
+  subgraph EXT["외부 API — 백엔드에서만 호출 · key 노출 금지"]
+    direction TB
+    OAI["OpenAI gpt-4.1-mini<br/>RAG·OCR·advice"]
+    GEM["Gemini 2.5 flash-lite/flash<br/>라이브 코칭·판정"]
+    GTTS["Google Cloud TTS<br/>Chirp 3 HD Kore"]
+    RTZ["Returnzero sommers<br/>한국어 STT"]
+    KAKAO["Kakao Local<br/>역지오코딩"]
+    KMA["기상청 data.go.kr<br/>단기예보"]
+    NONG["농촌진흥청 농사로<br/>주간농사정보"]
+  end
+
+  APP -- "NEXT_PUBLIC_API_BASE_URL" --> RT
+  WEB --> RT
+  ADM --> RT
+
+  REPO --> PG
+  SVC --> VEC
+  SVC --> OBJ
+
+  SVC -.-> OAI
+  SVC -.-> GEM
+  SVC -.-> GTTS
+  SVC -.-> RTZ
+  SVC -.-> KAKAO
+  SVC -.-> KMA
+  SVC -.-> NONG
+
+  NOTE["<b>DB가 권위 · AI는 보조(advisory)</b><br/>자동 저장 금지 — 사용자 확정 클릭만 INSERT"]
+  PG --- NOTE
+
+  classDef client fill:#E8F0E6,stroke:#1F6B3F,stroke-width:2px,color:#1A2B20
+  classDef backend fill:#14402A,stroke:#14402A,color:#FAF7F0
+  classDef db fill:#E8F0E6,stroke:#14402A,stroke-width:2px,color:#1A2B20
+  classDef ext fill:#FAF7F0,stroke:#5A6B5E,stroke-dasharray:5 4,color:#5A6B5E
+  classDef gold fill:#FAF7F0,stroke:#E8A93D,stroke-width:2px,color:#1A2B20
+
+  class APP,WEB,ADM client
+  class RT,SVC,REPO backend
+  class PG,VEC,OBJ db
+  class OAI,GEM,GTTS,RTZ,KAKAO,KMA,NONG ext
+  class NOTE gold

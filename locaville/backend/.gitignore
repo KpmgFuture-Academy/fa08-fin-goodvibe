@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.pytest_cache/
+
+# generate_demo_photos.py 가 생성한 AI 이미지 — 재현 가능 + 용량(MB 단위) 이라 git 미관리.
+# 필요 시 `python scripts/generate_demo_photos.py` 로 재생성.
+demo_photos/
+
+# tools/coach_eval.py 모델 비교용 테스트셋(생성 이미지·라벨·결과·xlsx) — 재현 가능 + 용량. git 미관리.
+# 재생성: python tools/gen_test_images.py / coach_eval.py / make_report.py
+test_photos/

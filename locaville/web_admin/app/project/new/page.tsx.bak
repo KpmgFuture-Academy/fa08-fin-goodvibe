@@ -1,0 +1,1017 @@
+"use client"
+
+/**
+ * 사업 등록 — 시행령(.pdf/.docx/.hwpx) 업로드 → 자동 초안 생성 → 검토.
+ *
+ * 흐름:
+ *   1. 업로드 영역에 파일 drop / click. multipart 로 POST /project/draft-from-document.
+ *   2. backend 가 텍스트 추출 + 청킹 + pgvector 영구 적재 + LLM 메타/Todo 추출.
+ *   3. 응답으로 받은 project_draft / todo_drafts 를 form 에 prefill — 사용자가 검토·수정.
+ *   4. 정식 등록은 [프로젝트 관리] 화면에서 사업/활동/Job 단계로 진행 (이번 페이지는 초안 검토까지).
+ */
+
+import { useCallback, useMemo, useRef, useState } from "react"
+import type { ChangeEvent, DragEvent } from "react"
+import { useRouter } from "next/navigation"
+import { ChevronDown, ChevronUp, FileText, Loader2, Upload, X } from "lucide-react"
+import { PageHeader } from "@/components/ui/PageHeader"
+import { Card, CardBody, CardHead } from "@/components/ui/Card"
+import { Btn } from "@/components/ui/Btn"
+import {
+  createProject,
+  PROJECT_ADMIN_CONNECTION_ERROR_MESSAGE,
+  uploadProjectDraftDocument,
+} from "@/lib/project-admin-api"
+import type {
+  ProjectDraftFromDocumentResponse,
+  ProjectDraftMeta,
+  ProjectTodoDraft,
+} from "@/lib/project-admin-types"
+
+const ACCEPTED_SUFFIXES = [".pdf", ".docx", ".hwpx"]
+const ACCEPT_ATTR = ACCEPTED_SUFFIXES.join(",")
+
+const fieldInputStyle = {
+  height: 44,
+  borderRadius: 10,
+  border: "1px solid var(--line)",
+  background: "#fff",
+  padding: "0 14px",
+  font: "inherit",
+} as const
+
+const fieldTextareaStyle = {
+  minHeight: 88,
+  borderRadius: 10,
+  border: "1px solid var(--line)",
+  background: "#fff",
+  padding: "12px 14px",
+  font: "inherit",
+  resize: "vertical" as const,
+} as const
+
+const labelStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 6,
+  fontSize: 13,
+  color: "var(--muted)",
+}
+
+const chipListStyle = {
+  display: "flex",
+  flexWrap: "wrap" as const,
+  gap: 6,
+  alignItems: "center",
+}
+
+const chipStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "var(--bg-subtle, #f3f4f6)",
+  border: "1px solid var(--line)",
+  fontSize: 13,
+}
+
+function hasSupportedSuffix(name: string): boolean {
+  const lower = (name || "").toLowerCase()
+  return ACCEPTED_SUFFIXES.some((s) => lower.endsWith(s))
+}
+
+function formatBudget(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return ""
+  return Math.round(value).toLocaleString("ko-KR")
+}
+
+function parseBudget(input: string): number | null {
+  const digits = (input || "").replace(/[^\d]/g, "")
+  if (!digits) return null
+  const n = Number(digits)
+  return Number.isFinite(n) ? n : null
+}
+
+// editable, flat todo shape — 백엔드 한국어 rule 키를 풀어서 input 친화 형태로 보관
+type EditableTodo = {
+  id: string
+  task_name: string
+  source_type: string
+  expanded: boolean
+  // 시작일
+  start_ref: string // 시작일.기준 — "모내기 이후" 등
+  start_phrase: string // 시작일.전후 — "약 한달 후" 등 자연어
+  start_days: string // 시작일.경과일수 (string 으로 input 호환)
+  // 종료일
+  end_ref: string
+  end_phrase: string
+  end_days: string
+  // 증빙
+  evidence_methods: string[] // 증빙조건.증빙방법
+  evidence_note: string // 증빙조건.기타
+  // 사용자 토글 (백엔드 schema 없음 — 시연용)
+  mandatory: boolean
+}
+
+function makeEditableTodo(t: ProjectTodoDraft, idx: number): EditableTodo {
+  const rule = t.rule || {}
+  const start = rule.시작일 || {}
+  const end = rule.종료일 || {}
+  const ev = rule.증빙조건 || {}
+  return {
+    id: `${idx}-${t.task_name}`,
+    task_name: t.task_name,
+    source_type: t.source_type || "",
+    expanded: false,
+    start_ref: (start.기준 || "").trim(),
+    start_phrase: (start.전후 || "").trim(),
+    start_days: start.경과일수 != null ? String(start.경과일수) : "",
+    end_ref: (end.기준 || "").trim(),
+    end_phrase: (end.전후 || "").trim(),
+    end_days: end.경과일수 != null ? String(end.경과일수) : "",
+    evidence_methods: Array.isArray(ev.증빙방법) ? ev.증빙방법.filter(Boolean) : [],
+    evidence_note: (ev.기타 || "").trim(),
+    mandatory: false,
+  }
+}
+
+// 한 줄 요약 — "모내기 이후 +30일" / "수확전 약 한달 후" 같은 자연어 만들기.
+function summarizeRulePart(ref: string, phrase: string, daysText: string): string {
+  const r = (ref || "").trim()
+  const p = (phrase || "").trim()
+  const dRaw = (daysText || "").trim()
+  const dNum = dRaw ? Number(dRaw) : NaN
+  let dPart = ""
+  if (Number.isFinite(dNum) && dNum !== 0) {
+    const sign = dNum > 0 ? "+" : "-"
+    dPart = `${sign}${Math.abs(dNum)}일`
+  } else if (p) {
+    dPart = p
+  }
+  return [r, dPart].filter(Boolean).join(" ")
+}
+
+export default function ProjectNewPage() {
+  const router = useRouter()
+
+  // ----------------------- 업로드 상태 -----------------------
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState("")
+  const [ingestSummary, setIngestSummary] = useState<
+    ProjectDraftFromDocumentResponse["ingest"] | null
+  >(null)
+
+  // ----------------------- 저장 상태 -----------------------
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
+
+  // ----------------------- 사업 메타 form -----------------------
+  const [projectName, setProjectName] = useState("")
+  const [projectYear, setProjectYear] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [hostOrg, setHostOrg] = useState("")
+  const [execOrg, setExecOrg] = useState("")
+  const [purpose, setPurpose] = useState("")
+  const [targetCrops, setTargetCrops] = useState<string[]>([])
+  const [targetRegions, setTargetRegions] = useState<string[]>([])
+  const [supportConditions, setSupportConditions] = useState<string[]>([])
+  const [budgetText, setBudgetText] = useState("")
+  const [contact, setContact] = useState("")
+
+  // ----------------------- todo 초안 -----------------------
+  const [todos, setTodos] = useState<EditableTodo[]>([])
+
+  // ----------------------- 미리보기 (시행령 본문 단락) -----------------------
+  const [previewBlocks, setPreviewBlocks] = useState<
+    ProjectDraftFromDocumentResponse["preview_blocks"]
+  >([])
+
+  const draftReady = ingestSummary != null
+
+  const applyDraft = useCallback((data: ProjectDraftFromDocumentResponse) => {
+    const meta: ProjectDraftMeta = data.project_draft || {}
+    setProjectName(meta.project_name || "")
+    setProjectYear(meta.project_year != null ? String(meta.project_year) : "")
+    setStartDate(meta.start_date || "")
+    setEndDate(meta.end_date || "")
+    setHostOrg(meta.host_org || "")
+    setExecOrg(meta.exec_org || "")
+    setPurpose(meta.purpose || "")
+    setTargetCrops(Array.isArray(meta.target_crops) ? meta.target_crops.filter(Boolean) : [])
+    setTargetRegions(
+      Array.isArray(meta.target_regions) ? meta.target_regions.filter(Boolean) : [],
+    )
+    setSupportConditions(
+      Array.isArray(meta.support_conditions) ? meta.support_conditions.filter(Boolean) : [],
+    )
+    setBudgetText(formatBudget(meta.budget_total_krw))
+    setContact(meta.contact || "")
+    setTodos((data.todo_drafts || []).map((t, idx) => makeEditableTodo(t, idx)))
+    setPreviewBlocks(data.preview_blocks || [])
+    setIngestSummary(data.ingest)
+  }, [])
+
+  const handleFile = useCallback(
+    async (file: File | null) => {
+      if (!file) return
+      setError("")
+      if (!hasSupportedSuffix(file.name)) {
+        setError(`지원하지 않는 형식입니다: ${file.name}. .pdf / .docx / .hwpx 만 업로드해 주세요.`)
+        return
+      }
+      setUploading(true)
+      try {
+        const data = await uploadProjectDraftDocument(file)
+        applyDraft(data)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : PROJECT_ADMIN_CONNECTION_ERROR_MESSAGE)
+      } finally {
+        setUploading(false)
+      }
+    },
+    [applyDraft],
+  )
+
+  const onInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    void handleFile(file)
+    // 같은 파일 재선택 가능하도록 reset.
+    e.target.value = ""
+  }
+
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer?.files?.[0] || null
+    void handleFile(file)
+  }
+
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    if (!dragging) setDragging(true)
+  }
+
+  const onDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+
+  const resetAll = () => {
+    setIngestSummary(null)
+    setError("")
+    setSaveError("")
+    setProjectName("")
+    setProjectYear("")
+    setStartDate("")
+    setEndDate("")
+    setHostOrg("")
+    setExecOrg("")
+    setPurpose("")
+    setTargetCrops([])
+    setTargetRegions([])
+    setSupportConditions([])
+    setBudgetText("")
+    setContact("")
+    setTodos([])
+    setPreviewBlocks([])
+  }
+
+  const onSave = useCallback(async () => {
+    setSaveError("")
+    const trimmedName = projectName.trim()
+    if (!trimmedName) {
+      setSaveError("사업명을 입력해 주세요.")
+      return
+    }
+    const yearNum = projectYear.trim() ? Number(projectYear) : null
+    if (yearNum != null && (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100)) {
+      setSaveError("시행연도 값이 올바르지 않습니다.")
+      return
+    }
+    const budgetNum = parseBudget(budgetText)
+
+    setSaving(true)
+    try {
+      const resp = await createProject({
+        prj_name: trimmedName,
+        exec_year: yearNum,
+        start_date: startDate || null,
+        end_date: endDate || null,
+        host_org: hostOrg.trim() || null,
+        exec_org: execOrg.trim() || null,
+        purpose: purpose.trim() || null,
+        target_crops: targetCrops,
+        target_regions: targetRegions,
+        support_conditions: supportConditions,
+        budget_total_krw: budgetNum,
+        contact: contact.trim() || null,
+      })
+      router.push(`/project/${encodeURIComponent(resp.prj_id)}`)
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : PROJECT_ADMIN_CONNECTION_ERROR_MESSAGE)
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    budgetText,
+    contact,
+    endDate,
+    execOrg,
+    hostOrg,
+    projectName,
+    projectYear,
+    purpose,
+    router,
+    startDate,
+    supportConditions,
+    targetCrops,
+    targetRegions,
+  ])
+
+  // ----------------------- chip 편집 헬퍼 -----------------------
+  const removeAt = (arr: string[], idx: number) => arr.filter((_, i) => i !== idx)
+
+  // ----------------------- 렌더 -----------------------
+  return (
+    <div>
+      <PageHeader
+        title="프로젝트 등록"
+        sub="시행령 문서를 업로드하면 사업 정보와 활동 초안을 자동으로 만들어 드립니다."
+        backHref="/project"
+        actions={
+          draftReady ? (
+            <Btn onClick={resetAll} disabled={uploading}>
+              초기화
+            </Btn>
+          ) : undefined
+        }
+      />
+
+      {/* 1. 업로드 카드 */}
+      <Card>
+        <CardHead
+          title="시행령 업로드"
+          sub=".pdf / .docx / .hwpx — 자동으로 사업 메타와 작업(todo) 초안을 추출합니다."
+        />
+        <CardBody>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPT_ATTR}
+            style={{ display: "none" }}
+            onChange={onInputChange}
+          />
+          <div
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onClick={() => inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                inputRef.current?.click()
+              }
+            }}
+            style={{
+              border: `2px dashed ${dragging ? "var(--accent, #3b82f6)" : "var(--line)"}`,
+              background: dragging ? "rgba(59,130,246,0.05)" : "var(--bg-subtle, #fafafa)",
+              borderRadius: 14,
+              padding: "32px 24px",
+              textAlign: "center",
+              cursor: uploading ? "progress" : "pointer",
+              transition: "border-color 120ms, background 120ms",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            {uploading ? (
+              <>
+                <Loader2 size={28} className="spin" />
+                <div style={{ fontSize: 15, color: "var(--muted)" }}>
+                  문서를 분석하고 있습니다. 텍스트 추출 → 청킹 → 임베딩 → 사업 초안 생성에 보통 30초 ~ 1분 정도 걸려요.
+                </div>
+              </>
+            ) : (
+              <>
+                <Upload size={28} color="var(--muted)" />
+                <div style={{ fontSize: 16, fontWeight: 600 }}>
+                  파일을 끌어다 놓거나 눌러서 업로드
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>
+                  .pdf · .docx · .hwpx (최대 30MB)
+                </div>
+              </>
+            )}
+          </div>
+
+          {error && (
+            <div className="alert alert-error" style={{ marginTop: 16 }}>
+              오류: {error}
+            </div>
+          )}
+
+          {ingestSummary && (
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 14px",
+                borderRadius: 10,
+                background: "var(--bg-subtle, #f3f4f6)",
+                border: "1px solid var(--line)",
+                fontSize: 13,
+                color: "var(--muted)",
+              }}
+            >
+              <FileText size={18} />
+              <span style={{ color: "var(--text)", fontWeight: 600 }}>{ingestSummary.filename}</span>
+              <span>· 형식 {ingestSummary.file_type}</span>
+              <span>· 단락 {ingestSummary.blocks}</span>
+              <span>· 청크 {ingestSummary.chunks}</span>
+              <span>· 인덱싱 {ingestSummary.inserted}</span>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      {draftReady && (
+        <>
+          {/* 2. 사업 메타 form */}
+          <Card>
+            <CardHead title="사업 정보 초안" sub="자동 추출 결과 — 검토 후 수정하세요." />
+            <CardBody>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: 16,
+                }}
+              >
+                <label style={labelStyle}>
+                  사업명
+                  <input
+                    type="text"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    style={fieldInputStyle}
+                    placeholder="예) 2026년 저탄소 농축산물 인증 사업"
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  시행연도
+                  <input
+                    type="number"
+                    value={projectYear}
+                    onChange={(e) => setProjectYear(e.target.value)}
+                    style={fieldInputStyle}
+                    placeholder="2026"
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  시행 시작일
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    style={fieldInputStyle}
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  시행 종료일
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={fieldInputStyle}
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  주관 기관
+                  <input
+                    type="text"
+                    value={hostOrg}
+                    onChange={(e) => setHostOrg(e.target.value)}
+                    style={fieldInputStyle}
+                    placeholder="예) 농림축산식품부"
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  시행 기관
+                  <input
+                    type="text"
+                    value={execOrg}
+                    onChange={(e) => setExecOrg(e.target.value)}
+                    style={fieldInputStyle}
+                    placeholder="예) 농산물품질관리원"
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  총 예산 (원)
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={budgetText}
+                    onChange={(e) =>
+                      setBudgetText(
+                        e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "")
+                          ? Number(e.target.value.replace(/[^\d]/g, "")).toLocaleString("ko-KR")
+                          : "",
+                      )
+                    }
+                    style={fieldInputStyle}
+                    placeholder="1,200,000,000"
+                  />
+                </label>
+
+                <label style={labelStyle}>
+                  문의처
+                  <input
+                    type="text"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    style={fieldInputStyle}
+                    placeholder="예) 02-123-4567 / contact@example.go.kr"
+                  />
+                </label>
+              </div>
+
+              <label style={{ ...labelStyle, marginTop: 16 }}>
+                목적 / 개요
+                <textarea
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  style={fieldTextareaStyle}
+                  placeholder="사업의 목적·개요 (1-2문장)"
+                />
+              </label>
+
+              <ChipListEditor
+                label="대상 작물"
+                items={targetCrops}
+                onChange={setTargetCrops}
+                placeholder="작물명 입력 후 Enter"
+              />
+              <ChipListEditor
+                label="대상 지역"
+                items={targetRegions}
+                onChange={setTargetRegions}
+                placeholder="지역명 입력 후 Enter"
+              />
+
+              <div style={{ ...labelStyle, marginTop: 16 }}>
+                지원 자격 / 조건
+                <textarea
+                  value={supportConditions.join("\n")}
+                  onChange={(e) =>
+                    setSupportConditions(
+                      e.target.value.split("\n").map((line) => line.trim()).filter(Boolean),
+                    )
+                  }
+                  style={{ ...fieldTextareaStyle, minHeight: 112 }}
+                  placeholder="한 줄에 하나씩 입력"
+                />
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  한 줄에 하나의 조건을 입력하세요. (저장 시 줄 단위로 정리)
+                </span>
+              </div>
+            </CardBody>
+          </Card>
+
+          {/* 3. 활동(todo) 초안 카드 */}
+          <Card>
+            <CardHead
+              title={`활동 초안 (${todos.length}건)`}
+              sub="자동 추출된 작업 항목 — 사업 등록 후 [프로젝트 관리] → 사업 상세에서 활동·Job 으로 다시 정리합니다."
+            />
+            <CardBody>
+              {todos.length === 0 ? (
+                <div className="muted" style={{ padding: 24, textAlign: "center" }}>
+                  자동 추출된 작업이 없습니다. 시행령 본문에 명시된 작업 단어가 적었을 수 있어요.
+                </div>
+              ) : (
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {todos.map((t) => (
+                    <TodoRow
+                      key={t.id}
+                      todo={t}
+                      onPatch={(patch) =>
+                        setTodos((arr) =>
+                          arr.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                        )
+                      }
+                      onRemove={() => setTodos((arr) => arr.filter((x) => x.id !== t.id))}
+                    />
+                  ))}
+                </ul>
+              )}
+            </CardBody>
+          </Card>
+
+          {/* 4. 본문 미리보기 (자동 추출 검증용) */}
+          {previewBlocks.length > 0 && (
+            <Card>
+              <CardHead
+                title="시행령 본문 미리보기"
+                sub="자동 인덱싱된 단락 일부 — 추출 결과가 본문과 어긋난다면 직접 수정해 주세요."
+              />
+              <CardBody>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    maxHeight: 320,
+                    overflowY: "auto",
+                  }}
+                >
+                  {previewBlocks.map((b, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        background: "var(--bg-subtle, #fafafa)",
+                        border: "1px solid var(--line)",
+                      }}
+                    >
+                      {b.title && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "var(--muted)",
+                            marginBottom: 4,
+                          }}
+                        >
+                          {b.title}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {b.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* 5. 저장 안내 + 액션 */}
+          <Card>
+            <CardBody>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                  padding: "4px 0",
+                }}
+              >
+                <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+                  사업 정보를 저장하면 자동으로 신규 사업 ID 가 발급됩니다. 활동·Job 의 상세
+                  등록은 저장 후 이동되는 <strong>사업 상세</strong> 화면에서 진행하세요.
+                  업로드한 시행령 본문은 RAG (pgvector) 에 영구 적재되어 농민 앱의 일정·증빙 안내에도 자동으로 활용됩니다.
+                </div>
+
+                {saveError && (
+                  <div className="alert alert-error" style={{ margin: 0 }}>
+                    오류: {saveError}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <Btn onClick={resetAll} disabled={saving}>
+                    초기화
+                  </Btn>
+                  <Btn
+                    variant="primary"
+                    onClick={() => void onSave()}
+                    disabled={saving || !projectName.trim()}
+                  >
+                    {saving ? "저장 중..." : "사업 등록"}
+                  </Btn>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        </>
+      )}
+
+      <style jsx>{`
+        :global(.spin) {
+          animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
+    </div>
+  )
+
+  // ----------------------- 내부 컴포넌트 — JSX 함수 안에 정의해 closure 캡쳐 단순화 -----------------------
+}
+
+// 칩 list editor — string[] in/out.
+function ChipListEditor({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  items: string[]
+  onChange: (next: string[]) => void
+  placeholder?: string
+}) {
+  const [draft, setDraft] = useState("")
+  const commit = () => {
+    const value = draft.trim()
+    if (!value) return
+    if (items.includes(value)) {
+      setDraft("")
+      return
+    }
+    onChange([...items, value])
+    setDraft("")
+  }
+  return (
+    <div style={{ ...labelStyle, marginTop: 16 }}>
+      {label}
+      <div style={chipListStyle}>
+        {items.map((item, idx) => (
+          <span key={`${item}-${idx}`} style={chipStyle}>
+            {item}
+            <button
+              type="button"
+              aria-label={`${item} 제거`}
+              onClick={() => onChange(items.filter((_, i) => i !== idx))}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                padding: 0,
+                color: "var(--muted)",
+              }}
+            >
+              <X size={14} />
+            </button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault()
+              commit()
+            } else if (e.key === "Backspace" && !draft && items.length > 0) {
+              onChange(items.slice(0, -1))
+            }
+          }}
+          onBlur={commit}
+          placeholder={placeholder}
+          style={{
+            ...fieldInputStyle,
+            height: 36,
+            minWidth: 140,
+            flex: "1 1 140px",
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// todo 한 행 — 요약 라인 + 펼침 시 시작/종료 규칙·증빙·필수 inline 편집.
+function TodoRow({
+  todo,
+  onPatch,
+  onRemove,
+}: {
+  todo: EditableTodo
+  onPatch: (patch: Partial<EditableTodo>) => void
+  onRemove: () => void
+}) {
+  const startSummary = summarizeRulePart(todo.start_ref, todo.start_phrase, todo.start_days)
+  const endSummary = summarizeRulePart(todo.end_ref, todo.end_phrase, todo.end_days)
+  const evidenceSummary = todo.evidence_methods.length
+    ? todo.evidence_methods.join(" · ")
+    : ""
+
+  const subLabelStyle = {
+    fontSize: 12,
+    color: "var(--muted)",
+    marginBottom: 4,
+    display: "block",
+  }
+  const ruleInputStyle = {
+    ...fieldInputStyle,
+    height: 38,
+    width: "100%",
+  }
+
+  return (
+    <li
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        padding: "12px 14px",
+        borderRadius: 10,
+        border: "1px solid var(--line)",
+        background: "#fff",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input
+          type="text"
+          value={todo.task_name}
+          onChange={(e) => onPatch({ task_name: e.target.value })}
+          style={{ ...fieldInputStyle, height: 38, flex: 1 }}
+          placeholder="작업명"
+        />
+        <Btn
+          variant="ghost"
+          size="sm"
+          onClick={() => onPatch({ expanded: !todo.expanded })}
+          icon={todo.expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        >
+          {todo.expanded ? "접기" : "규칙 편집"}
+        </Btn>
+        <Btn variant="ghost" size="sm" onClick={onRemove} icon={<X size={14} />}>
+          제거
+        </Btn>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 14,
+          fontSize: 13,
+          color: "var(--muted)",
+        }}
+      >
+        <span>
+          시작: <strong style={{ color: "var(--text)" }}>{startSummary || "—"}</strong>
+        </span>
+        <span>
+          종료: <strong style={{ color: "var(--text)" }}>{endSummary || "—"}</strong>
+        </span>
+        <span>
+          필수: <strong style={{ color: "var(--text)" }}>{todo.mandatory ? "예" : "—"}</strong>
+        </span>
+        <span>
+          증빙: <strong style={{ color: "var(--text)" }}>{evidenceSummary || "—"}</strong>
+        </span>
+        <span>
+          추출 출처: <strong style={{ color: "var(--text)" }}>{todo.source_type || "—"}</strong>
+        </span>
+      </div>
+
+      {todo.expanded && (
+        <div
+          style={{
+            marginTop: 4,
+            padding: "12px 12px 14px",
+            background: "var(--bg-subtle, #fafafa)",
+            border: "1px solid var(--line)",
+            borderRadius: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
+          {/* 시작 / 종료 규칙 — 동일 패턴 두 행 */}
+          {(
+            [
+              {
+                title: "시작 규칙",
+                refValue: todo.start_ref,
+                phraseValue: todo.start_phrase,
+                daysValue: todo.start_days,
+                onRef: (v: string) => onPatch({ start_ref: v }),
+                onPhrase: (v: string) => onPatch({ start_phrase: v }),
+                onDays: (v: string) => onPatch({ start_days: v }),
+                refPlaceholder: "예) 모내기 이후",
+              },
+              {
+                title: "종료 규칙",
+                refValue: todo.end_ref,
+                phraseValue: todo.end_phrase,
+                daysValue: todo.end_days,
+                onRef: (v: string) => onPatch({ end_ref: v }),
+                onPhrase: (v: string) => onPatch({ end_phrase: v }),
+                onDays: (v: string) => onPatch({ end_days: v }),
+                refPlaceholder: "예) 수확 전",
+              },
+            ] as const
+          ).map((row) => (
+            <div key={row.title}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{row.title}</div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.2fr 1fr 0.7fr",
+                  gap: 8,
+                }}
+              >
+                <label>
+                  <span style={subLabelStyle}>기준 작업</span>
+                  <input
+                    type="text"
+                    value={row.refValue}
+                    onChange={(e) => row.onRef(e.target.value)}
+                    placeholder={row.refPlaceholder}
+                    style={ruleInputStyle}
+                  />
+                </label>
+                <label>
+                  <span style={subLabelStyle}>전후 표현</span>
+                  <input
+                    type="text"
+                    value={row.phraseValue}
+                    onChange={(e) => row.onPhrase(e.target.value)}
+                    placeholder="예) 약 한달 후"
+                    style={ruleInputStyle}
+                  />
+                </label>
+                <label>
+                  <span style={subLabelStyle}>경과일수</span>
+                  <input
+                    type="number"
+                    value={row.daysValue}
+                    onChange={(e) => row.onDays(e.target.value)}
+                    placeholder="±일"
+                    style={ruleInputStyle}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+
+          {/* 증빙 */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>증빙 방법</div>
+            <ChipListEditor
+              label=""
+              items={todo.evidence_methods}
+              onChange={(next) => onPatch({ evidence_methods: next })}
+              placeholder="예) 사진, 영수증 — 입력 후 Enter"
+            />
+            <label style={{ marginTop: 8, display: "block" }}>
+              <span style={subLabelStyle}>증빙 메모</span>
+              <input
+                type="text"
+                value={todo.evidence_note}
+                onChange={(e) => onPatch({ evidence_note: e.target.value })}
+                placeholder="추가 안내가 있다면 한 줄"
+                style={ruleInputStyle}
+              />
+            </label>
+          </div>
+
+          {/* 필수 토글 */}
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={todo.mandatory}
+              onChange={(e) => onPatch({ mandatory: e.target.checked })}
+            />
+            <span style={{ fontSize: 13 }}>필수 (시행령이 의무로 지정한 작업)</span>
+          </label>
+        </div>
+      )}
+    </li>
+  )
+}

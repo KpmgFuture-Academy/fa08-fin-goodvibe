@@ -1,0 +1,57 @@
+/* ──────────────────────────────────────────────────────────────
+   저탄마을 디자인 토큰 — globals.css 에 병합하세요.
+   기존 Tailwind v4 globals.css 의 @layer base 또는 :root 에 추가.
+   컴포넌트는 arbitrary value 로 이 변수를 참조합니다:
+   예) className="bg-[var(--lv-bg)] text-[color:var(--lv-ink)]"
+   ────────────────────────────────────────────────────────────── */
+:root {
+  /* 표면 */
+  --lv-bg: #f3efe4;        /* 야외 가독성용 아이보리 페이지 배경 */
+  --lv-bg-soft: #f7f5ef;
+  --lv-card: #ffffff;
+
+  /* 텍스트 (WCAG AA 충족) */
+  --lv-ink: #1f2a1f;
+  --lv-ink-soft: #3d4a3d;
+  --lv-muted: #5e6356;
+  --lv-muted-2: #6b6f5f;
+
+  /* 라인 */
+  --lv-line: #d2c9b1;
+  --lv-line-soft: #e6dfca;
+
+  /* 브랜드(농협 그린) — 완료·정상·주요 행동 */
+  --lv-primary: #2f6d4f;
+  --lv-accent-dark: #1c4a36;
+  --lv-accent-soft: #e3f0e6;
+
+  /* 주의·요청·마감 (빨강 아님) */
+  --lv-warn: #b5601b;
+  --lv-warn-soft: #fff0d8;
+
+  /* 실패·삭제·위험 (이때만 빨강) */
+  --lv-danger: #a12b2b;
+  --lv-danger-soft: #ffe2e2;
+}
+
+/* 접근성: 키보드/스위치 포커스 표시 */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--lv-accent-dark);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+button:focus:not(:focus-visible) { outline: none; }
+
+/* 접근성: 움직임 줄이기 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

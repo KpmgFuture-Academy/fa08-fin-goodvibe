@@ -1,0 +1,132 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "attributeBackgroundColorOdd": "#FAF7F0",
+    "attributeBackgroundColorEven": "#E8F0E6"
+  }
+}}%%
+erDiagram
+  user_master {
+    int user_no PK
+    string login_id
+    string user_name
+    string status_cd
+  }
+  amo_family {
+    string amo_regno PK
+    string ville_id
+    string amo_name
+    int chief_no FK
+  }
+  parcel {
+    string amo_regno PK, FK
+    int parcel_no PK
+    string parcel_name
+    string parcel_usage
+    float gps_lat
+    float gps_long
+  }
+  ville_group {
+    int group_no PK
+    string group_name
+  }
+  group_member {
+    int group_no PK, FK
+    string amo_regno PK, FK
+    string role
+  }
+  program_master {
+    string biz_id PK
+    string biz_name
+  }
+  project {
+    string prj_id PK
+    string biz_id FK
+    string prj_name
+  }
+  prj_activity {
+    string prj_id PK, FK
+    string activity_id PK
+    string activity_name
+  }
+  farm_job {
+    string job_cd PK
+    string job_name
+    string start_mmdd
+    string end_mmdd
+  }
+  act_grp {
+    int group_no PK, FK
+    string amo_regno PK, FK
+    string prj_id PK, FK
+    string activity_id PK, FK
+  }
+  prj_todo_list {
+    int group_no PK, FK
+    string amo_regno PK, FK
+    string prj_id PK, FK
+    string activity_id PK, FK
+    int job_seq PK
+    string job_cd FK
+    date est_start_date
+    date est_end_date
+  }
+  journal {
+    int user_no PK, FK
+    date job_date PK
+    int exec_no PK
+    string job_cd FK
+    string exec_desc
+    json ai_result_json
+  }
+  prj_journal {
+    int user_no PK, FK
+    date job_date PK, FK
+    int exec_no PK, FK
+    string prj_id FK
+    string activity_id FK
+    int job_seq FK
+  }
+  evidence {
+    int user_no PK, FK
+    date job_date PK, FK
+    int exec_no PK, FK
+    int seq_no PK
+    string file_path
+    json raw_json
+  }
+  notification {
+    int notice_no PK
+    int user_no FK
+    string content_cd
+  }
+  farm_helper {
+    int helper_user_no PK, FK
+    int help_seq PK
+    int recipient_user_no FK
+  }
+
+  user_master ||--|| amo_family : "chief_no 가족대표"
+  amo_family ||--o{ parcel : "필지 보유"
+  amo_family ||--o{ group_member : "작목반 가입"
+  ville_group ||--o{ group_member : ""
+  program_master ||--o{ project : "사업 유형"
+  project ||--o{ prj_activity : "활동 구성"
+  ville_group ||--o{ act_grp : "활동 참여"
+  amo_family ||--o{ act_grp : ""
+  prj_activity ||--o{ act_grp : ""
+  act_grp ||--o{ prj_todo_list : "할 일 생성"
+  farm_job ||--o{ prj_todo_list : "작업 마스터"
+  farm_job ||--o{ journal : ""
+  user_master ||--o{ journal : "영농일지 작성"
+  journal ||--o| prj_journal : "사업 연결되면"
+  prj_todo_list ||--o{ prj_journal : "완료 판정 근거"
+  journal ||--o{ evidence : "증빙 사진"
+  user_master ||--o{ notification : "알림 수신"
+  user_master ||--o{ farm_helper : "기록 도우미 pair"

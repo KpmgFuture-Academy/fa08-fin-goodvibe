@@ -1,0 +1,69 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "clusterBkg": "#FAF7F0",
+    "clusterBorder": "#D9D4C8",
+    "edgeLabelBackground": "#FAF7F0"
+  },
+  "flowchart": { "curve": "basis", "htmlLabels": true }
+}}%%
+flowchart TD
+  DOC["📄 시행지침 HWPX<br/>저탄소농업 프로그램 정책 문서"]
+
+  subgraph AI["① AI 초안 — admin_project_draft_service"]
+    direction TB
+    CHUNK["hwpx_parser → 청킹<br/>(library/locaville/rag)"]
+    META["extract_project_meta<br/>사업명·기간·단가 추출"]
+    NAMES["extract_todo_names<br/>작업명 목록 추출"]
+    RULE["extract_policy_schedule_rule (RAG)<br/>작업별 시작일·종료일·증빙 규칙 JSON"]
+    CHUNK --> META
+    CHUNK --> NAMES --> RULE
+  end
+
+  subgraph ADMIN["② 관리자 확정 — web_admin"]
+    CONFIRM["project_draft + todo_drafts 검토<br/>→ project · prj_activity 확정 저장"]
+  end
+
+  subgraph CHIEF["③ 이장님 매칭 — web_user"]
+    MATCH["참여 농가 + 필지 배정<br/>act_grp · act_grp_parcel"]
+  end
+
+  subgraph GEN["④ To-do 생성"]
+    TODOLIST[("prj_todo_list<br/>PK: group_no · amo_regno ·<br/>prj_id · activity_id · job_seq")]
+    TID["<b>todo_id 합성</b><br/>{amo_regno}-{prj_id}-{activity_id}-{job_seq}<br/>예: 1110000004-KK26A001-AWT0011-12"]
+    SCHED["job_schedule.py 룰<br/>anchor: 모내기 일지 → 후속 일정 자동 이동<br/>choice: 바이오차 봄·가을 선택"]
+    TODOLIST --> TID
+    SCHED -.->|est_*_date UPDATE| TODOLIST
+  end
+
+  subgraph TODAY["⑤ 오늘 할 일 — app_user"]
+    API["GET /todo/today<br/>computed_status 계산<br/>journal 존재 = 완료"]
+    HOME["홈 카드<br/>'중간 물떼기 — 내일까지'<br/>사진 찍고 완료하기"]
+    API --> HOME
+  end
+
+  DOC --> CHUNK
+  RULE --> CONFIRM
+  META --> CONFIRM
+  CONFIRM --> MATCH
+  MATCH --> TODOLIST
+  TID --> API
+
+  classDef doc fill:#FAF7F0,stroke:#5A6B5E,stroke-dasharray:5 4,color:#1A2B20
+  classDef ai fill:#E8F0E6,stroke:#1F6B3F,stroke-width:2px,color:#1A2B20
+  classDef human fill:#14402A,stroke:#14402A,color:#FAF7F0
+  classDef db fill:#E8F0E6,stroke:#14402A,stroke-width:2px,color:#1A2B20
+  classDef gold fill:#FAF7F0,stroke:#E8A93D,stroke-width:2px,color:#1A2B20
+
+  class DOC doc
+  class CHUNK,META,NAMES,RULE ai
+  class CONFIRM,MATCH human
+  class TODOLIST,API db
+  class TID,SCHED gold
+  class HOME human

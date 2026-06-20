@@ -1,0 +1,40 @@
+/* =====================================================================
+   저탄마을 이장님 대시보드(web_user) — 디자인 토큰
+   프로토타입 `저탄마을 이장님 화면.html` 의 :root 변수와 1:1.
+   web_user 글로벌 CSS 에 병합하세요. (--lvb-* 네이밍 유지)
+   ===================================================================== */
+:root {
+  --lvb-bg: #faf6ea; --lvb-bg-soft: #f3efe4; --lvb-card: #ffffff;
+  --lvb-ink: #1f2a1f; --lvb-ink-soft: #3d4a3d; --lvb-muted: #5e6356; --lvb-muted-2: #6a6e60;
+  --lvb-line: #e8e1ce; --lvb-line-2: #d8cfb6;
+  --lvb-accent: #2f6d4f; --lvb-accent-dark: #1c4a36; --lvb-accent-soft: #e3f0e6;
+  --lvb-warn: #b5601b; --lvb-warn-soft: #fbe6cf; --lvb-warn-ink: #8a4a0c;
+  --lvb-danger: #a12b2b; --lvb-danger-soft: #f7dede;
+  --lvb-side: #1c4a36; --lvb-side2: #15392a;
+  --lvb-blue: #2c6b76; --lvb-plum: #8a4a7a; --lvb-clay: #b5601b;
+  --lvb-r: 16px;
+}
+
+/* 상태 톤 매핑 (농가 state → 색) — 색만으로 구분 금지, 항상 라벨 동반 */
+.lvb-state-good   { --tone: var(--lvb-accent); }
+.lvb-state-mid    { --tone: var(--lvb-muted); }
+.lvb-state-behind { --tone: var(--lvb-warn); }
+.lvb-state-help   { --tone: var(--lvb-clay); }
+
+/* 접근성: 데스크톱이지만 시니어 이장님 기준 — 충분한 대비 + 포커스 표시 */
+.lvb-root :where(button, a, [role="button"], input, textarea):focus-visible {
+  outline: 3px solid var(--lvb-accent-dark);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lvb-root *, .lvb-root *::before, .lvb-root *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* 상태 라벨 토큰 (TSX 에서 import 해서 써도 됨)
+   STATE_LABEL = { good:"정상", mid:"지켜보는 중", behind:"확인 필요", help:"도우미 연결" }
+   URGENCY     = { over:"마감 지남"(danger), today:"오늘 처리"(warn),
+                   week:"이번 주"(warn), soon:"여유"(neutral) } */

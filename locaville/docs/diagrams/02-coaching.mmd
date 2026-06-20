@@ -1,0 +1,61 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "background": "transparent",
+    "fontFamily": "Pretendard, sans-serif",
+    "primaryColor": "#E8F0E6",
+    "primaryTextColor": "#1A2B20",
+    "primaryBorderColor": "#1F6B3F",
+    "lineColor": "#5A6B5E",
+    "actorBkg": "#14402A",
+    "actorTextColor": "#FAF7F0",
+    "actorBorder": "#14402A",
+    "signalColor": "#1A2B20",
+    "signalTextColor": "#1A2B20",
+    "noteBkgColor": "#E8F0E6",
+    "noteTextColor": "#1A2B20",
+    "noteBorderColor": "#D9D4C8",
+    "labelBoxBkgColor": "#E8A93D",
+    "labelBoxBorderColor": "#E8A93D",
+    "labelTextColor": "#1A2B20",
+    "loopTextColor": "#14402A",
+    "sequenceNumberColor": "#FAF7F0"
+  }
+}}%%
+sequenceDiagram
+  autonumber
+  participant Cam as 카메라<br/>getUserMedia
+  participant FE as PhotoLiveCoachOverlay<br/>(app_user)
+  participant BE as POST /photo-guard/coach<br/>(routers/photo_guard.py)
+  participant Gem as Gemini 2.5 flash-lite<br/>(coach_photo)
+  participant TTS as POST /ai/tts<br/>Google Chirp 3 HD Kore
+
+  Note over FE: mount 시 정적 안내 6종<br/>(어둠2·흔들림3·인사1) Chirp 미리 합성 → 캐시
+
+  loop 2초 폴링 — 변화 없으면 최대 4초까지 적응
+    Cam->>FE: 현재 frame
+    FE->>FE: 로컬 분석 32×24 샘플<br/>밝기·선명도·8×8 서명
+
+    alt 너무 어두움 / 흔들림 (LLM 호출 0회)
+      FE->>FE: 회전 안내문 선택<br/>"잠깐 멈추고 비춰 주세요"
+      FE-->>Cam: 캐시 mp3 0ms 재생
+    else 정상 frame
+      FE->>FE: 중앙 65% crop → 640×480 다운샘플<br/>JPEG q=0.5
+      FE->>BE: multipart frame + evidence_type + job_cd
+      BE->>Gem: 시행지침 9p 기준 프롬프트<br/>PIC·RCT·EDU × job_cd, max_tokens 200
+      Gem-->>BE: { status: ok·adjust·wait, message }
+      BE-->>FE: JSON 응답
+      alt TTS 캐시 hit
+        FE-->>Cam: mp3 0ms 재생
+      else 캐시 miss
+        FE->>TTS: { text }
+        TTS-->>FE: mp3 stream (~1s) → 캐시 저장 + 재생
+      end
+    end
+  end
+
+  Note over FE: ok 3연속 → 폴링 정지<br/>화면 움직임(sigDiff>10) 감지 시 자동 재개
+
+  Cam->>FE: 사용자 셔터
+  FE->>FE: 풀해상도 캡처 → 폴링·음성 정지
+  FE->>BE: POST /evidence/upload<br/>→ OCR + judge_todo_match + Storage + DB
