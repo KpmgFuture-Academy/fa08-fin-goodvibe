@@ -186,7 +186,7 @@ cd locaville/web_admin && pnpm exec tsc --noEmit
 | 대표 농업인 | `farmer_id=kimys68` 김영수 |
 | 도우미 데모 | 박정호 recipient / 김영수 helper |
 
-## 포트폴리오 포인트
+## 포인트
 
 - 단순 챗봇이 아니라 정책 문서, 일정, 증빙, 검토를 연결한 end-to-end 서비스
 - 고령 사용자 기준의 모바일 UX와 마을 운영자 웹을 동시에 설계
