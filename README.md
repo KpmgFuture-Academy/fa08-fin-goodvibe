@@ -7,6 +7,11 @@
 
 ## 바로 보기
 
+| 서비스 | 링크 |
+| --- | --- |
+| 농업인 모바일 앱 | [https://locavilleapp.vercel.app/](https://locavilleapp.vercel.app/) |
+| 이장님 웹 대시보드 | [https://locaville.vercel.app/dashboard](https://locaville.vercel.app/dashboard) |
+
 - [최종 발표자료 PDF](./docs/presentation/발표자료.pdf)
 - [최종 발표자료 HTML](./docs/presentation/저탄마을_발표자료.html)
 - [발표 스크립트 v3](./docs/presentation/저탄마을_발표_스크립트_v3.md)
